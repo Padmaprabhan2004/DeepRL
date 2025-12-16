@@ -1,1 +1,1 @@
-## CS 285 DeepRL Homework and Practice
+## Deep RL Practice
