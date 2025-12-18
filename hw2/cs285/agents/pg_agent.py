@@ -182,7 +182,7 @@ class PGAgent(nn.Module):
         """
         q_vals=np.zeros(len(rewards))
         running_sum=0
-        for t,r in enumerate(rewards):
+        for t in reversed(range(len(rewards))):
             running_sum=rewards[t]+self.gamma*running_sum
             q_vals[t]=running_sum
         return q_vals
