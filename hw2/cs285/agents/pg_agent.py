@@ -101,7 +101,7 @@ class PGAgent(nn.Module):
             # trajectory at each point.
             # In other words: Q(s_t, a_t) = sum_{t'=0}^T gamma^t' r_{t'}
             # TODO: use the helper function self._discounted_return to calculate the Q-values
-      
+            # currently its in the form of (n_traj,trajectory_size,reward)
             for traj_reward in rewards:
                 discounted_return=self._discounted_return(traj_reward)
                 q_values.append(np.array(discounted_return))
