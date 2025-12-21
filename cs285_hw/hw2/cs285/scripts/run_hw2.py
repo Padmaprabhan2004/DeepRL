@@ -113,7 +113,8 @@ def run_training_loop(args):
             print("Done logging...\n\n")
 
             logger.flush()
-
+        #use for half-cheetah env 
+        #if itr == args.n_iter - 1 and args.video_log_freq!=-1:
         if args.video_log_freq != -1 and itr % args.video_log_freq == 0:
             print("\nCollecting video rollouts...")
             eval_video_trajs = utils.sample_n_trajectories(

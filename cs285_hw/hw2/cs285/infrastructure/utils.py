@@ -23,14 +23,16 @@ def sample_trajectory(env: gym.Env, policy: MLPPolicy, max_length: int, render: 
                 img = env.sim.render(camera_name="track", height=500, width=500)[::-1]
             else:
                 img = env.render()
+                if isinstance(img, list):
+                    img = img[0]
 
-            #test
-            if render and len(image_obs) == 0:
-                print("First frame shape:", img[0].shape)
+            # FIX 1: normalize for TensorBoard
+            img = img.astype(np.float32) / 255.0
 
             image_obs.append(
-                cv2.resize(img[0], dsize=(250, 250), interpolation=cv2.INTER_CUBIC)
+                cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC)
             )
+
 
         # TODO use the most recent ob and the policy to decide what to do
         ac: np.ndarray = policy.get_action(ob)
@@ -58,7 +60,7 @@ def sample_trajectory(env: gym.Env, policy: MLPPolicy, max_length: int, render: 
 
     return {
         "observation": np.array(obs, dtype=np.float32),
-        "image_obs": np.array(image_obs, dtype=np.uint8),
+        "image_obs": np.array(image_obs, dtype=np.float32),
         "reward": np.array(rewards, dtype=np.float32),
         "action": np.array(acs, dtype=np.float32),
         "next_observation": np.array(next_obs, dtype=np.float32),
