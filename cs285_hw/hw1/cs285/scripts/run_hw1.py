@@ -144,7 +144,8 @@ def run_training_loop(params):
                 # and replace paths[i]["action"] with these expert labels
                 for path in paths:
                     obs=path["observation"]
-                    expert_actions=expert_policy.get_action(obs)[0]
+                    expert_actions=expert_policy.get_action(obs)
+                    #print(expert_actions.shape)
                     path["action"]=expert_actions
 
 
@@ -175,7 +176,7 @@ def run_training_loop(params):
 
         # log/save
         print('\nBeginning logging procedure...')
-        if log_video:
+        if log_video and itr==(params['n_iter']-1):
             # save eval rollouts as videos in tensorboard event file
             print('\nCollecting video rollouts eval')
             eval_video_paths = utils.sample_n_trajectories(
