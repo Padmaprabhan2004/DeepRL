@@ -29,22 +29,22 @@ def sample_trajectory(env, policy, max_path_length, render=False):
             if hasattr(env, 'sim'):
                 img = env.sim.render(camera_name='track', height=500, width=500)[::-1]
             else:
-                img = env.render(mode='single_rgb_array')
+                img = env.render()
             image_obs.append(cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC))
     
         # TODO use the most recent ob to decide what to do
          # HINT: this is a numpy array
-        observ=ptu.from_numpy(ob)
-        dist=policy.forward(observ)
+        observ = ptu.from_numpy(ob).unsqueeze(0)
+        dist=policy(observ)
         ac = ptu.to_numpy(dist.sample())
         ac=ac[0]
 
         # TODO: take that action and get reward and next ob
-        next_ob, rew, done, _ = env.step()
+        next_ob, rew, done, _ = env.step(ac)
         
         # TODO rollout can end due to done, or due to max_path_length
         steps += 1
-        rollout_done = TODO # HINT: this is either 0 or 1
+        rollout_done = done or (steps>=max_path_length) # HINT: this is either 0 or 1
         
         # record result of taking that action
         obs.append(ob)

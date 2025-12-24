@@ -131,8 +131,9 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         # `torch.distributions.Distribution` object. It's up to you!
         mean=self.mean_net(observation)
         std=torch.exp(self.logstd)
+        std=std.unsqueeze(0).expand_as(mean)
         dist=torch.distributions.Normal(mean,std)
-        raise dist
+        return dist
 
     def update(self, observations, actions):
         """
@@ -145,6 +146,8 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         """
         # TODO: update the policy and return the loss
         observations=ptu.from_numpy(observations)
+        actions = ptu.from_numpy(actions)
+
         dist=self.forward(observations)
         log_probs=dist.log_prob(actions).sum(axis=-1)
         loss=-(log_probs).mean()
