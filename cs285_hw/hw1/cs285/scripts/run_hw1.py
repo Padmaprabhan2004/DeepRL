@@ -62,7 +62,8 @@ def run_training_loop(params):
     #############
 
     # Make the gym environment
-    env = gym.make(params['env_name'], render_mode=None)
+    #make sure to change render mode
+    env = gym.make(params['env_name'], render_mode="rgb_array")
     env.reset(seed=seed)
 
     # Maximum length for episodes
