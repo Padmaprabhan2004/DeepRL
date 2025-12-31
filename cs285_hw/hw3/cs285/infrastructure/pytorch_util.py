@@ -17,6 +17,7 @@ _str_to_activation = {
     "identity": nn.Identity(),
 }
 
+
 device = None
 
 

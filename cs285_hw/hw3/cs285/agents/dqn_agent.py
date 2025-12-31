@@ -66,15 +66,17 @@ class DQNAgent(nn.Module):
         # Compute target values
         with torch.no_grad():
             # TODO(student): compute target values
-            next_qa_values = ...
+            next_qa_values = self.target_critic(obs)
 
             if self.use_double_q:
                 raise NotImplementedError
             else:
-                next_action = ...
+                next_action = None
             
-            next_q_values = ...
-            target_values = ...
+            next_q_values = torch.max(next_qa_values)
+            target_values = reward
+            if not done:
+                target_values+=self.discount*next_q_values
 
         # TODO(student): train the critic with the target values
         qa_values = ...
