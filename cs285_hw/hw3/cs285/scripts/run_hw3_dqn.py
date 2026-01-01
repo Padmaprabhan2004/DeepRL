@@ -89,16 +89,17 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
     reset_env_training()
 
     for step in tqdm.trange(config["total_steps"], dynamic_ncols=True):
+
         epsilon = exploration_schedule.value(step)
         
         # TODO(student): Compute action
-        action = agent.get_action(observation)
+        action = agent.get_action(observation,epsilon)
 
         # TODO(student): Step the environment
-        next_observation,reward,done,_=env.step(action)
+        next_observation,reward,done,info=env.step(action)
         next_observation = np.asarray(next_observation)
         truncated = info.get("TimeLimit.truncated", False)
-
+        done=done or truncated
         # TODO(student): Add the data to the replay buffer
         if isinstance(replay_buffer, MemoryEfficientReplayBuffer):
             # We're using the memory-efficient replay buffer,
@@ -126,10 +127,10 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
             obs=batch["observations"]
             actions=batch["actions"]
             rewards=batch["rewards"]
-            next_observations=batch["rewards"]
+            next_observations=batch["next_observations"]
             dones=batch["dones"]
             # TODO(student): Train the agent. `batch` is a dictionary of numpy arrays,
-            update_info = agent.update(obs,actions,rewards,next_observations,dones)
+            update_info = agent.update(obs,actions,rewards,next_observations,dones,step)
 
             # Logging code
             update_info["epsilon"] = epsilon
