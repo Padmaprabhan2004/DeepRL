@@ -43,14 +43,19 @@ class DQNAgent(nn.Module):
 
     def get_action(self, observation: np.ndarray, epsilon: float = 0.02) -> int:
         """
-        Used for evaluation.
+        Used for evaluation. Implement epsilon-greedy strategy
         """
         observation = ptu.from_numpy(np.asarray(observation))[None]
+        with torch.no_grad():
+            q_values=self.critic(observation)
+            greedy_action=torch.argmax(q_values,dim=1).item()
 
-        # TODO(student): get the action from the critic using an epsilon-greedy strategy
-        action = ...
+        probs = np.ones(self.num_actions)*epsilon/(self.num_actions-1)
+        probs[greedy_action]=1-epsilon
 
-        return ptu.to_numpy(action).squeeze(0).item()
+        action = np.random.choice(probs)
+
+        return ptu.to_numpy(action)
 
     def update_critic(
         self,
