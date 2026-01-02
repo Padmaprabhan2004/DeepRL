@@ -69,7 +69,7 @@ class DQNAgent(nn.Module):
         """Update the DQN critic, and return stats for logging."""
         (batch_size,) = reward.shape
 
-        # Compute target values
+        # Compute target values y_i
         with torch.no_grad():
             # TODO(student): compute target values
             next_qa_values = self.target_critic(next_obs)
@@ -88,7 +88,7 @@ class DQNAgent(nn.Module):
                 done_f=done.float() 
                 target_values=reward+self.discount*(1 - done_f)*next_q_values  
 
-
+        #forward prop for grad descent
         # TODO(student): train the critic with the target values
         qa_values = self.critic(obs)
         q_values = torch.gather(qa_values, 1, action.unsqueeze(1)).squeeze(1)
