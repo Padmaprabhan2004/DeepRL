@@ -74,14 +74,19 @@ class DQNAgent(nn.Module):
             # TODO(student): compute target values
             next_qa_values = self.target_critic(next_obs)
 
+
+            #branch for double q
             if self.use_double_q:
-                raise NotImplementedError
+                next_action = torch.argmax(self.critic(next_obs),dim=1)
+                next_q_values=torch.gather(next_qa_values,1,next_action.unsqueeze(1)).squeeze(1)
+                done_f=done.float()
+                target_values=reward+self.discount*(1 - done_f)*next_q_values
+            #branch for deep q
             else:
                 next_action = None
-            
-            next_q_values=torch.amax(next_qa_values,dim=1)
-            done=done.float()
-            target_values=reward+self.discount*(1 - done)*next_q_values
+                next_q_values=torch.amax(next_qa_values,dim=1) 
+                done_f=done.float() 
+                target_values=reward+self.discount*(1 - done_f)*next_q_values  
 
 
         # TODO(student): train the critic with the target values
