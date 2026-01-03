@@ -232,7 +232,7 @@ class MemoryEfficientReplayBuffer:
             done = np.array(done)
         if isinstance(action, int):
             action = np.array(action, dtype=np.int64)
-
+        #print("dim ",next_observation.ndim)
         assert (
             next_observation.ndim == 2
         ), "Single-frame observation should have dimensions (H, W)"
