@@ -1,7 +1,4 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda",
-    "python-envs.pythonProjects": [],
     "ROS2.distro": "jazzy",
     "python.autoComplete.extraPaths": [
         "/home/softroboticslabiith/ros2_ws/install/turtlesim_project/lib/python3.12/site-packages",

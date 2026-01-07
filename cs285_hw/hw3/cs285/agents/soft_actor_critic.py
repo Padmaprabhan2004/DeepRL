@@ -246,7 +246,7 @@ class SoftActorCritic(nn.Module):
         batch_size = obs.shape[0]
 
         # TODO(student): Generate an action distribution
-        action_distribution: torch.distributions.Distribution = ...
+        action_distribution: torch.distributions.Distribution = self.actor(obs)
 
         with torch.no_grad():
             # TODO(student): draw num_actor_samples samples from the action distribution for each batch element
