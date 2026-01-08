@@ -240,6 +240,7 @@ class SoftActorCritic(nn.Module):
 
         # TODO(student): Compute the entropy of the action distribution.
         # Note: Think about whether to use .rsample() or .sample() here...
+        #sample, since it doesnt depend on actor weights. is using direct entropy fn right? or use monte carlo approxn?
         return action_distribution.entropy()
     
 
@@ -291,13 +292,13 @@ class SoftActorCritic(nn.Module):
 
         # TODO(student): Sample actions
         # Note: Think about whether to use .rsample() or .sample() here...
-        action = ...
+        action = action_distribution.rsample()
 
         # TODO(student): Compute Q-values for the sampled state-action pair
-        q_values = ...
+        q_values = self.critic(obs,action).mean(dim=0)
 
         # TODO(student): Compute the actor loss
-        loss = ...
+        loss = q_values
 
         return loss, torch.mean(self.entropy(action_distribution))
 
