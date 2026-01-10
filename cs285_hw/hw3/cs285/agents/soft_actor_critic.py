@@ -244,7 +244,7 @@ class SoftActorCritic(nn.Module):
         # TODO(student): Compute the entropy of the action distribution.
         # Note: Think about whether to use .rsample() or .sample() here...
         #sample, since it doesnt depend on actor weights. is using direct entropy fn right? or use monte carlo approxn?
-        return action_distribution.entropy().mean() #for an inbuilt entropy function
+        return action_distribution.entropy() #for an inbuilt entropy function
         #action = action_distribution.sample()
         #log_probs = action_distribution.log_prob(action).mean(dim=0)
         #return log_probs
