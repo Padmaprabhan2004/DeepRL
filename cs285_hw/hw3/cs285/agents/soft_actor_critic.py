@@ -146,24 +146,21 @@ class SoftActorCritic(nn.Module):
         ), f"next_qs should have shape (num_critics, batch_size) but got {next_qs.shape}"
         num_critic_networks, batch_size = next_qs.shape
         assert num_critic_networks == self.num_critic_networks
+        N=self.num_critic_networks
+        B=batch_size
+
 
         # TODO(student): Implement the different backup strategies.
         if self.target_critic_backup_type == "doubleq":
-            temp = next_qs[0]
-            next_qs[0] = next_qs[1]
-            next_qs[1] = temp 
+            next_qs = next_qs[[1, 0]]
         elif self.target_critic_backup_type == "min":
-            next_qs= torch.amax(next_qs,dim=0)
+            next_qs= torch.amin(next_qs,dim=0)#(B,)
+            next_qs = next_qs.unsqueeze(0).expand(N,B)
         elif self.target_critic_backup_type == "mean":
-            next_qs = next_qs.mean(dim=0)
+            next_qs = next_qs.mean(dim=0)#(B,)
+            next_qs = next_qs.unsqueeze(0).expand(N,B)
         else:
             pass
-
-
-        # If our backup strategy removed a dimension, add it back in explicitly
-        # (assume the target for each critic will be the same)
-        if next_qs.shape == (batch_size,):
-            next_qs = next_qs[None].expand((self.num_critic_networks, batch_size)).contiguous()
 
         assert next_qs.shape == (
             self.num_critic_networks,
@@ -190,7 +187,7 @@ class SoftActorCritic(nn.Module):
             # TODO(student)
             # Sample from the actor
             next_action_distribution: torch.distributions.Distribution = self.actor(next_obs)
-            next_action = next_action_distribution.sample()
+            next_action = next_action_distribution.sample()#(batch_size,)
 
             # Compute the next Q-values for the sampled actions
             next_qs = self.target_critic(next_obs,next_action)
@@ -207,12 +204,13 @@ class SoftActorCritic(nn.Module):
 
             if self.use_entropy_bonus and self.backup_entropy:
                 # TODO(student): Add entropy bonus to the target values for SAC
-                next_action_entropy = self.entropy(next_action_distribution)
-                next_qs -= next_action_entropy
+                log_probs = next_action_distribution.log_prob(next_action)#(batch_size,)
+                next_qs = next_qs - self.temperature* log_probs.unsqueeze(0)#(self.num_critic_networks,batch_size,)
+
 
             # Compute the target Q-value
             done_f = done.float()
-            target_values: torch.Tensor = reward+self.discount*(1-done_f)*next_qs
+            target_values: torch.Tensor = reward+self.discount*(1-done_f)*next_qs#doubful portion
             assert target_values.shape == (
                 self.num_critic_networks,
                 batch_size
@@ -222,9 +220,9 @@ class SoftActorCritic(nn.Module):
         # Predict Q-values
         q_values = self.critic(obs,action)
         assert q_values.shape == (self.num_critic_networks, batch_size), q_values.shape
-
+        
         # Compute loss
-        loss: torch.Tensor = self.critic_loss(q_values,target_values)
+        loss: torch.Tensor = self.critic_loss(q_values,target_values).mean(dim=1)
 
         self.critic_optimizer.zero_grad()
         loss.backward()
