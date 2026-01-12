@@ -222,7 +222,7 @@ class SoftActorCritic(nn.Module):
         assert q_values.shape == (self.num_critic_networks, batch_size), q_values.shape
         
         # Compute loss
-        loss: torch.Tensor = self.critic_loss(q_values,target_values).mean(dim=1)
+        loss: torch.Tensor = self.critic_loss(q_values,target_values)#should i do mean?
 
         self.critic_optimizer.zero_grad()
         loss.backward()
