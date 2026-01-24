@@ -90,12 +90,15 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         # Train the agent
         if step >= config["training_starts"]:
             # TODO(student): Sample a batch of config["batch_size"] transitions from the replay buffer
-            batch = replay_buffer.sample(config["batch_size"])
+            batch =replay_buffer.sample(config["batch_size"])
+            batch = ptu.from_numpy(batch)
+            
             observations = batch["observations"]
             actions = batch["actions"]
-            rewards = batch["rewards"] 
+            rewards = batch["rewards"]
             next_observations = batch["next_observations"]
             dones = batch["dones"]
+
             update_info = agent.update(observations,actions,rewards,next_observations,dones,step)
 
             # Logging
