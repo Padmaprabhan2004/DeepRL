@@ -4,41 +4,6 @@ import torch.distributions as D
 from typing import Union
 
 
-class SquashedGaussian:
-    def __init__(self, mean, std, eps=1e-6):
-        self.mean = mean
-        self.std = std
-        self.eps = eps
-        self.normal = torch.distributions.Normal(mean, std)
-
-    #modification--pls note
-    def sample(self, sample_shape=torch.Size()):
-        if len(sample_shape) == 0:
-            u = self.normal.sample()
-            return torch.tanh(u)
-        else:
-            u = self.normal.sample(sample_shape)
-            return torch.tanh(u)
-
-
-    def rsample(self):
-        u = self.normal.rsample()
-        a = torch.tanh(u)
-        return a
-
-    def log_prob(self, a):
-        # inverse tanh (numerically stable)
-        u = 0.5 * torch.log((1 + a + self.eps) / (1 - a + self.eps))
-
-        logp = self.normal.log_prob(u).sum(dim=-1)
-        logp -= torch.sum(torch.log(1 - a.pow(2) + self.eps), dim=-1)
-        return logp
-
-    def entropy(self):
-        # SAC uses base Gaussian entropy
-        return self.normal.entropy().sum(dim=-1)
-
-
 def make_multi_normal(
     mean: torch.Tensor, std: Union[float, torch.Tensor]
 ) -> D.Distribution:

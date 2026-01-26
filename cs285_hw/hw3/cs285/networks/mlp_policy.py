@@ -6,7 +6,7 @@ import torch
 from torch import distributions
 
 from cs285.infrastructure import pytorch_util as ptu
-from cs285.infrastructure.distributions import make_tanh_transformed, make_multi_normal, SquashedGaussian
+from cs285.infrastructure.distributions import make_tanh_transformed, make_multi_normal
 
 class MLPPolicy(nn.Module):
     """
@@ -86,7 +86,7 @@ class MLPPolicy(nn.Module):
                     std = torch.nn.functional.softplus(self.std) + 1e-2
 
             if self.use_tanh:
-                action_distribution = SquashedGaussian(mean, std)
+                action_distribution = make_tanh_transformed(mean, std)
             else:
                 return make_multi_normal(mean, std)
 

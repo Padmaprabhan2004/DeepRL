@@ -33,7 +33,7 @@ def sac_config(
     target_update_period: Optional[int] = None,
     soft_target_update_rate: Optional[float] = None,
     # Actor-critic configuration
-    actor_gradient_type="reinforce",  # One of "reinforce" or "reparametrize"
+    actor_gradient_type="reparametrize",  # One of "reinforce" or "reparametrize"
     num_actor_samples: int = 1,
     num_critic_updates: int = 1,
     # Settings for multiple critics
