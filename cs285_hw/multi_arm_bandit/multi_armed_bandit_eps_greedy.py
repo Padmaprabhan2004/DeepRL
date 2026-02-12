@@ -66,20 +66,20 @@ class MultiArmedBandit:
     
 import os
 
-probs = [0.10, 0.50, 0.60, 0.80, 0.10, 0.25, 0.60, 0.45, 0.75, 0.65]
-eps = 0.1
-solve = MultiArmedBandit(10, probs, eps=eps)
-N_experiments = 10000 
-N_steps = 500 
+probs=[0.10, 0.50, 0.60, 0.80, 0.10, 0.25, 0.60, 0.45, 0.75, 0.65]
+eps=0.3
+solve=MultiArmedBandit(10, probs, eps=eps)
+N_experiments=10000 
+N_steps=500 
 
 
 R,A = solve.multi_step(N_steps,N_experiments)
 
 save_fig = True 
-output_dir = os.path.join(os.getcwd(), "output")
+output_dir = os.getcwd()
 
 
-#PLOTTING
+#plots
 R_avg = R/np.float32(N_experiments)
 plt.plot(R_avg,".")
 plt.xlabel("Step")
@@ -88,7 +88,7 @@ plt.grid()
 plt.xlim([1,N_steps])
 if save_fig:
     if not os.path.exists(output_dir): os.mkdir(output_dir)
-    plt.savefig(os.path.join(output_dir, "rewards.png"), bbox_inches="tight")
+    plt.savefig(os.path.join(output_dir, "rewards_{}.png".format(eps)), bbox_inches="tight")
 else:
     plt.show()
 plt.close()
@@ -110,7 +110,7 @@ for legobj in leg.legendHandles:
     legobj.set_linewidth(4.0)
 if save_fig:
     if not os.path.exists(output_dir): os.mkdir(output_dir)
-    plt.savefig(os.path.join(output_dir, "actions.png"), bbox_inches="tight")
+    plt.savefig(os.path.join(output_dir, "actions_{}.png".format(eps)), bbox_inches="tight")
 else:
     plt.show()
 plt.close()
