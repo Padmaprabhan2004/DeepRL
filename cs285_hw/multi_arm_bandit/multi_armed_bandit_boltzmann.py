@@ -10,8 +10,8 @@ class Environment:
         return 1 if (np.random.random()<self.probs[slot]) else 0
 
 class MAB_Agent:
-    def __init__(self,eps,n_actions):
-        self.eps = eps
+    def __init__(self,n_actions,temp:int):
+        self.temp = temp
         self.n_actions = n_actions
         self.n = np.zeros(n_actions, dtype=int)
         self.Q = np.zeros(n_actions, dtype=float)
@@ -21,25 +21,22 @@ class MAB_Agent:
         self.Q[action]+= (1.0/self.n[action]) * (reward - self.Q[action])
 
     def get_action(self,):
-        if np.random.random() < self.eps:
-            #exploration
-            return np.random.randint(self.n_actions)
-        else:
-            #exploitation
-            #uniform over max returns, dont always go for argmax slots
-            best_val = np.max(self.Q)
-            best_slots = np.where(self.Q == best_val)[0]
-            return np.random.choice(best_slots)
+        logits = self.Q/self.temp
+        logits = logits - np.max(logits)
+        exp_logits = np.exp(logits)
+        probs = exp_logits/np.sum(exp_logits)
+
+        return np.random.choice(self.n_actions,p=probs)
 
 class MultiArmedBandit:
-    def __init__(self,n_arms,probs,eps=0.1):
+    def __init__(self,n_arms,probs,temp):
         self.n_arms = n_arms
         self.probs = probs
-        self.eps = eps
+        self.temp= temp
 
     def step(self,N_steps):
         env = Environment(self.probs)
-        agent = MAB_Agent(self.eps,self.n_arms)
+        agent = MAB_Agent(self.n_arms,self.temp)
         actions,rewards = [],[]
         for i in range(N_steps):
             action = agent.get_action()
@@ -57,6 +54,7 @@ class MultiArmedBandit:
             actions, rewards = self.step(N_steps) 
             if (i + 1) % (N_experiments / 100) == 0:
                 print("[Experiment {}/{}] ".format(i + 1, N_experiments) +
+                    "temp = {}, ".format(self.temp) +
                     "n_steps = {}, ".format(N_steps) +
                     "reward_avg = {}".format(np.sum(rewards) / len(rewards)))
             R += rewards
@@ -67,39 +65,48 @@ class MultiArmedBandit:
 import os
 
 probs=[0.10, 0.50, 0.60, 0.80, 0.10, 0.25, 0.60, 0.45, 0.75, 0.65]
-eps=0.3
-solve=MultiArmedBandit(len(probs), probs, eps=eps)
+temp = [0.01,0.05,0.1,0.3,0.5] #reward across varying temperature.
 N_experiments=10000 
 N_steps=500 
+Rewards:list[np.ndarray] =[]
+Actions:list[np.ndarray] =[]
+for temperature in temp:
+    solve=MultiArmedBandit(len(probs), probs,temperature)
+    R,A = solve.multi_step(N_steps,N_experiments)
+    Rewards.append(R)
+    Actions.append(A)
 
 
-R,A = solve.multi_step(N_steps,N_experiments)
+for i,R in enumerate(Rewards):
+    R_avg = R/np.float32(N_experiments)
+    print(R_avg.shape)
+    plt.plot(R_avg,".",label="T = {}".format(temp[i]))
 
-save_fig = True 
-output_dir = os.getcwd()
-
-
-#plots
-R_avg = R/np.float32(N_experiments)
-print(R_avg.shape)
-plt.plot(R_avg,".")
 plt.xlabel("Step")
 plt.ylabel("Average Reward")
 plt.grid()
 plt.xlim([1,N_steps])
+
+
+save_fig = True 
+output_dir = os.getcwd()
+plt.legend()
+
 if save_fig:
     if not os.path.exists(output_dir): os.mkdir(output_dir)
-    plt.savefig(os.path.join(output_dir, "rewards_{}.png".format(eps)), bbox_inches="tight")
+    plt.savefig(os.path.join(output_dir, "rewards_boltzmann.png"), bbox_inches="tight")
 else:
     plt.show()
 plt.close()
 
-for i in range(len(probs)):
-    slot_i_actions = 100 * A[:,i]/N_experiments
+optimal_arm = np.argmax(probs)
+#plotting only the optimal action
+for idx,A in enumerate(Actions):
+    slot_i_actions = 100 * A[:,optimal_arm]/N_experiments
     steps = list(np.array(range(len(slot_i_actions)))+1)
     plt.plot(steps, slot_i_actions, "-",
-             linewidth=4,
-             label="Slot {} ({:.0f}%)".format(i+1, 100*probs[i]))
+            linewidth=3,
+            label="T = {}".format(temp[idx]))
 
 plt.xlabel("Step")
 plt.ylabel("Count Percentage (%)")
@@ -111,7 +118,7 @@ for legobj in leg.legendHandles:
     legobj.set_linewidth(4.0)
 if save_fig:
     if not os.path.exists(output_dir): os.mkdir(output_dir)
-    plt.savefig(os.path.join(output_dir, "actions_{}.png".format(eps)), bbox_inches="tight")
+    plt.savefig(os.path.join(output_dir, "actions_boltzmann.png"), bbox_inches="tight")
 else:
     plt.show()
 plt.close()
