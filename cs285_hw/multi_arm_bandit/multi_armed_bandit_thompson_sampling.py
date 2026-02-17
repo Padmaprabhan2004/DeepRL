@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+#Thomposon sampling and upper confidence bound for multi arm bandits
 
 class Environment:
     #slot machine 10 states
@@ -9,42 +10,37 @@ class Environment:
     def step(self,slot):
         return 1 if (np.random.random()<self.probs[slot]) else 0
 
-class MAB_Agent:
-    def __init__(self,n_actions,beta:int):
-        self.beta = beta
-        self.n_actions = n_actions
-        self.n = np.zeros(n_actions, dtype=int)
-        self.Q = np.zeros(n_actions, dtype=float)
-        self.policy = np.ones(self.n_actions)*1/self.n_actions
 
-    def update_Q(self,action,reward):
-        self.n[action]+=1
-        self.Q[action]+=(1.0/self.n[action])*(reward-self.Q[action])
-        
-        #update policy
-        greedy_action = np.argmax(self.Q)
-        #nominally decrease others
-        self.policy-=self.beta*self.policy
-        #make argmax better
-        self.policy[greedy_action]+=self.beta
+class ThompsonAgent:
+    def __init__(self,n_actions):
+        self.n_actions = n_actions
+        self.alpha = np.ones(n_actions)
+        self.beta = np.ones(n_actions)
+    
+    def update(self,action,reward):
+        if reward == 1:
+            self.alpha[action] +=1
+        else:
+            self.beta[action] +=1
 
     def get_action(self,):
-        return np.random.choice(self.n_actions,p=self.policy)
+        samples = np.random.beta(self.alpha,self.beta)
+        return np.argmax(samples)
+
 
 class MultiArmedBandit:
-    def __init__(self,n_arms,probs,beta):
+    def __init__(self,n_arms,probs):
         self.n_arms = n_arms
         self.probs = probs
-        self.beta= beta
 
     def step(self,N_steps):
         env = Environment(self.probs)
-        agent = MAB_Agent(self.n_arms,self.beta)
+        agent = ThompsonAgent(self.n_arms)
         actions,rewards = [],[]
         for i in range(N_steps):
             action = agent.get_action()
             reward = env.step(action)
-            agent.update_Q(action,reward)
+            agent.update(action,reward)
             actions.append(action)
             rewards.append(reward)
         return np.array(actions),np.array(rewards)
@@ -57,10 +53,8 @@ class MultiArmedBandit:
             actions, rewards = self.step(N_steps) 
             if (i + 1) % (N_experiments / 100) == 0:
                 print("[Experiment {}/{}] ".format(i + 1, N_experiments) +
-                    "beta = {}, ".format(self.beta) +
-                    "n_steps = {}, ".format(N_steps) +
                     "reward_avg = {}".format(np.sum(rewards) / len(rewards)))
-            R += rewards
+            R+=rewards
             for j, a in enumerate(actions):
                 A[j][a] += 1
 
@@ -69,48 +63,39 @@ class MultiArmedBandit:
 import os
 
 probs=[0.10, 0.50, 0.60, 0.80, 0.10, 0.25, 0.60, 0.45, 0.75, 0.65]
-betas = [0.01,0.05,0.1,0.3,0.5] #reward across varying beta
+eps=0.3
+solve=MultiArmedBandit(len(probs), probs)
 N_experiments=10000 
 N_steps=500 
-Rewards:list[np.ndarray] =[]
-Actions:list[np.ndarray] =[]
-for beta in betas:
-    solve=MultiArmedBandit(len(probs), probs,beta)
-    R,A = solve.multi_step(N_steps,N_experiments)
-    Rewards.append(R)
-    Actions.append(A)
 
 
-for i,R in enumerate(Rewards):
-    R_avg = R/np.float32(N_experiments)
-    print(R_avg.shape)
-    plt.plot(R_avg,".",label="T = {}".format(betas[i]))
+R,A = solve.multi_step(N_steps,N_experiments)
 
+save_fig = True 
+output_dir = os.getcwd()
+
+
+#plots
+R_avg = R/np.float32(N_experiments)
+print(R_avg.shape)
+plt.plot(R_avg,".")
 plt.xlabel("Step")
 plt.ylabel("Average Reward")
 plt.grid()
 plt.xlim([1,N_steps])
-
-
-save_fig = True 
-output_dir = os.getcwd()
-plt.legend()
-
 if save_fig:
     if not os.path.exists(output_dir): os.mkdir(output_dir)
-    plt.savefig(os.path.join(output_dir, "rewards_pursuit.png"), bbox_inches="tight")
+    plt.savefig(os.path.join(output_dir, "rewards_thompson.png"), bbox_inches="tight")
 else:
     plt.show()
 plt.close()
 
-optimal_arm = np.argmax(probs)
-#plotting only the optimal action
-for idx,A in enumerate(Actions):
-    slot_i_actions = 100 * A[:,optimal_arm]/N_experiments
+for i in range(len(probs)):
+    slot_i_actions = 100 * A[:,i]/N_experiments
     steps = list(np.array(range(len(slot_i_actions)))+1)
     plt.plot(steps, slot_i_actions, "-",
-            linewidth=3,
-            label="T = {}".format(betas[idx]))
+             linewidth=4,
+             label="Slot {} ({:.0f}%)".format(i+1, 100*probs[i]))
 
 plt.xlabel("Step")
 plt.ylabel("Count Percentage (%)")
@@ -122,7 +107,7 @@ for legobj in leg.legendHandles:
     legobj.set_linewidth(4.0)
 if save_fig:
     if not os.path.exists(output_dir): os.mkdir(output_dir)
-    plt.savefig(os.path.join(output_dir, "actions_pursuit.png"), bbox_inches="tight")
+    plt.savefig(os.path.join(output_dir, "actions_thompson.png"), bbox_inches="tight")
 else:
     plt.show()
 plt.close()
