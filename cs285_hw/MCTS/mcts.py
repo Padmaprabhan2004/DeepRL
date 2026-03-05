@@ -63,7 +63,6 @@ class Node:
 
         self.visit_count = 0
         self.value_sum = 0
-        # CHANGED: exploration constant is configurable through args.
         self.C = self.args.get("C", np.sqrt(2))
 
     def is_fully_expanded(self):
@@ -82,10 +81,10 @@ class Node:
         return best_child
     
     def get_ucb(self,child):
-        # CHANGED: always visit unvisited children first and avoid divide-by-zero.
+        # visit unvisited children first and avoid divide-by-zero.
         if child.visit_count == 0:
             return np.inf
-        # CHANGED: child value is from child perspective, so negate for parent selection.
+        # child value is from child perspective, so negate for parent selection.
         q_val = -child.value_sum / child.visit_count
         return q_val + self.C * np.sqrt(np.log(max(1, self.visit_count)) / child.visit_count)
 
@@ -111,7 +110,7 @@ class Node:
             return value
         
         rollout_state = self.state.copy()
-        # CHANGED: track value perspective while rollout alternates players.
+        # track value perspective while rollout alternates players.
         perspective = 1
         while True:
             valid_moves = self.game.get_valid_moves(rollout_state)
@@ -120,10 +119,9 @@ class Node:
             value, is_terminal = self.game.get_value_and_is_terminated(rollout_state,action)
             #print(is_terminal)
             if is_terminal:
-                # CHANGED: convert terminal value to the node's perspective.
                 return value * perspective
             rollout_state = self.game.change_perspective(rollout_state,-1)
-            # CHANGED: perspective flips every ply after changing viewpoint.
+            # perspective flips every ply after changing viewpoint.
             perspective *= -1
 
     def backpropagate(self,value):
@@ -165,7 +163,7 @@ class MonteCarloTreeSearch:
         #from the root we need to make only one move, to select the child (select the action most visited)
         for child in root.children:
             action_probs[child.action_taken]=child.visit_count
-        # CHANGED: normalize safely in case no visits were recorded.
+    
         total_visits = np.sum(action_probs)
         if total_visits > 0:
             action_probs /= total_visits
@@ -207,3 +205,4 @@ if __name__ == "__main__":
                 print("draw")
             break
         player = tct.get_opponent(player)
+
