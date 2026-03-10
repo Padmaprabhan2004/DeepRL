@@ -33,11 +33,15 @@ class TicTacToe:
         )
     
     def get_value_and_is_terminated(self,state,action):
-        #action was taken by parent, so the player in check win will be parent.
+        #action was taken by parent, so the player in check win will be parent, the value and result are for parent
+
+        #parent has won, so it gets value 1
         if self.check_win(state,action):
             return 1, True
+        #no valid moves
         if np.sum(self.get_valid_moves(state))==0:
             return 0, True
+        #there are still valid moves, so game aint terminating
         return 0,False
     
     def get_opponent(self,player):
@@ -66,7 +70,9 @@ class Node:
         self.C = self.args.get("C", np.sqrt(2))
 
     def is_fully_expanded(self):
-        #game terminated and no children for the node
+        #game terminated and no children for the node (leaf node)
+        #some nodes (leaves) may have no expandable states due to their terminal state
+        #but they cant be expanded further so len(self.children) shouldnt be zero to expand.
         return np.sum(self.expandable_states)==0 and len(self.children)!= 0
     
     def select(self):
@@ -168,7 +174,7 @@ class MonteCarloTreeSearch:
         if total_visits > 0:
             action_probs /= total_visits
         return action_probs
-        #return visit_counts
+        #return visit_count_probs
 
 
     
