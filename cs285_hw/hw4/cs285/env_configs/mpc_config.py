@@ -27,7 +27,7 @@ def mpc_config(
     num_agent_train_steps_per_iter: int = 20,
     num_eval_trajectories: int = 10,
 ):
-    # hardcoded for this assignment
+   
     if env_name == "reacher-cs285-v0":
         ep_len = 200
     if env_name == "cheetah-cs285-v0":
