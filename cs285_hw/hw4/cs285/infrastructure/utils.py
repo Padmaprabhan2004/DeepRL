@@ -10,7 +10,7 @@ from typing import Dict, Tuple, List
 ############################################
 ############################################
 
-
+#random initial policy to sample initial tuples (obs,act,next_obs,rewards,dones)
 class RandomPolicy:
     def __init__(self, env: gym.Env):
         self.env = env
@@ -19,9 +19,7 @@ class RandomPolicy:
         return self.env.action_space.sample()
 
 
-def sample_trajectory(
-    env: gym.Env, policy: MLPPolicy, max_length: int, render: bool = False
-) -> Dict[str, np.ndarray]:
+def sample_trajectory(env: gym.Env, policy: MLPPolicy, max_length: int, render: bool = False) -> Dict[str, np.ndarray]:
     """Sample a rollout in the environment from a policy."""
     ob = env.reset()
     obs, acs, rewards, next_obs, dones, image_obs = [], [], [], [], [], []

@@ -30,28 +30,22 @@ from cs285.envs import register_envs
 
 register_envs()
 
-
-def collect_mbpo_rollout(
-    env: gym.Env,
-    mb_agent: ModelBasedAgent,
-    sac_agent: SoftActorCritic,
-    ob: np.ndarray,
-    rollout_len: int = 1,
-):
+#for sac rollouts
+def collect_mbpo_rollout(env: gym.Env,mb_agent: ModelBasedAgent,sac_agent: SoftActorCritic,ob: np.ndarray,rollout_len: int = 1,):
     obs, acs, rewards, next_obs, dones = [], [], [], [], []
     for _ in range(rollout_len):
         # TODO(student): collect a rollout using the learned dynamics models
         # HINT: get actions from `sac_agent` and `next_ob` predictions from `mb_agent`.
         # Average the ensemble predictions directly to get the next observation.
         # Get the reward using `env.get_reward`.
+        pass
+        #obs.append(ob)
+        #acs.append(ac)
+        #rewards.append(rew)
+        #next_obs.append(next_ob)
+        #dones.append(False)
 
-        obs.append(ob)
-        acs.append(ac)
-        rewards.append(rew)
-        next_obs.append(next_ob)
-        dones.append(False)
-
-        ob = next_ob
+        #ob = next_ob
 
     return {
         "observation": np.array(obs),
@@ -60,6 +54,7 @@ def collect_mbpo_rollout(
         "next_observation": np.array(next_obs),
         "done": np.array(dones),
     }
+
 
 
 def run_training_loop(
@@ -117,12 +112,12 @@ def run_training_loop(
         # collect data
         print("Collecting data...")
         if itr == 0:
-            # TODO(student): collect at least config["initial_batch_size"] transitions with a random policy
-            # HINT: Use `utils.RandomPolicy` and `utils.sample_trajectories`
-            trajs, envsteps_this_batch = ...
+            #note:::::;
+            # collect at least config["initial_batch_size"] transitions with a random policy
+            trajs, envsteps_this_batch = utils.sample_trajectories(env=env,policy=utils.RandomPolicy(env),min_timesteps_per_batch=config["initial_batch_size"],max_length=config["ep_len"])
         else:
-            # TODO(student): collect at least config["batch_size"] transitions with our `actor_agent`
-            trajs, envsteps_this_batch = ...
+            # since first collection has crossed and policy is somewhat trained, collect at least config["batch_size"] transitions with our `actor_agent`
+            trajs, envsteps_this_batch = utils.sample_trajectories(env=env,policy=actor_agent,min_timesteps_per_batch=config["batch_size"],max_length=config["ep_len"])
 
         total_envsteps += envsteps_this_batch
         logger.log_scalar(total_envsteps, "total_envsteps", itr)
@@ -137,7 +132,7 @@ def run_training_loop(
                 dones=traj["done"],
             )
 
-        # if doing MBPO, add the collected data to the SAC replay buffer as well
+        # if doing MBPO, add the collected data to the SAC replay buffer as well->problem 3/4
         if sac_config is not None:
             for traj in trajs:
                 sac_replay_buffer.batched_insert(
@@ -158,13 +153,15 @@ def run_training_loop(
         # train agent
         print("Training agent...")
         all_losses = []
-        for _ in tqdm.trange(
-            config["num_agent_train_steps_per_iter"], dynamic_ncols=True
-        ):
+        for _ in tqdm.trange(config["num_agent_train_steps_per_iter"], dynamic_ncols=True):
             step_losses = []
-            # TODO(student): train the dynamics models
+            # train the dynamics models
             # HINT: train each dynamics model in the ensemble with a *different* batch of transitions!
             # Use `replay_buffer.sample` with config["train_batch_size"].
+            for i in range(config["agent_kwargs"]["ensemble_size"]):
+                batch = replay_buffer.sample(config["batch_size"])
+                ensemble_step_loss = actor_agent.update(i,batch["observations"],batch["actions"],batch["next_observations"])
+                step_losses.append(ensemble_step_loss)
             all_losses.append(np.mean(step_losses))
 
         # on iteration 0, plot the full learning curve
