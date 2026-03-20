@@ -197,14 +197,17 @@ class ModelBasedAgent(nn.Module):
                 self.ob_dim,
             )
 
-            # TODO(student): get the reward for the current step in each rollout
-            # HINT: use `self.env.get_reward`. `get_reward` takes 2 arguments:
-            # `next_obs` and `acs` with shape (n, ob_dim) and (n, ac_dim),
-            # respectively, and returns a tuple of `(rewards, dones)`. You can 
-            # ignore `dones`. You might want to do some reshaping to make
-            # `next_obs` and `acs` 2-dimensional.
-            rewards= self.env.get_reward(next_obs.reshape(self.ensemble_size*self.mpc_num_action_sequences,-1),acs.reshape(self.ensemble_size*self.mpc_num_action_sequences,-1))
-            rewards =  rewards.reshape(self.ensemble_size,self.mpc_num_action_sequences)
+            flat_next_obs = next_obs.reshape(
+                self.ensemble_size * self.mpc_num_action_sequences, self.ob_dim
+            )
+            # Each candidate action sequence is shared across all ensemble models,
+            # so we repeat the same actions along the ensemble dimension before
+            # flattening into the batch expected by env.get_reward.
+            flat_acs = np.broadcast_to(acs, next_obs.shape[:2] + (self.ac_dim,)).reshape(
+                self.ensemble_size * self.mpc_num_action_sequences, self.ac_dim
+            )
+            rewards, _ = self.env.get_reward(flat_next_obs, flat_acs)
+            rewards = rewards.reshape(self.ensemble_size, self.mpc_num_action_sequences)
             assert rewards.shape == (self.ensemble_size, self.mpc_num_action_sequences)
 
             sum_of_rewards += rewards
@@ -212,7 +215,7 @@ class ModelBasedAgent(nn.Module):
             obs = next_obs
 
         # now we average over the ensemble dimension
-        return sum_of_rewards.mean(axis=0)
+        return sum_of_rewards.mean(axis=0)#(mpc_num_action_seq,)
 
     def get_action(self, obs: np.ndarray):
         """
@@ -221,7 +224,7 @@ class ModelBasedAgent(nn.Module):
         Args:
             obs: (ob_dim,)
         """
-        # always start with uniformly random actions
+        # always start with uniformly random actions, be it random or cem strategy.
         action_sequences = np.random.uniform(
             self.env.action_space.low,
             self.env.action_space.high,
@@ -235,34 +238,60 @@ class ModelBasedAgent(nn.Module):
             best_index = np.argmax(rewards)
             return action_sequences[best_index][0]
         elif self.mpc_strategy == "cem":
-            #self.cem_num_iters = cem_num_iters
-            #self.cem_num_elites = cem_num_elites
-            #self.cem_alpha = cem_alpha
-            rewards =  self.evaluate_action_sequences(obs,action_sequences)
-            top_j_indices = np.argsort(rewards)[-self.cem_num_elites:]
-            top_j_seq = action_sequences[top_j_indices,:,:]
-            elite_mean = np.mean(top_j_seq, axis=0)
-            elite_std = np.std(top_j_seq, axis=0)
-            for i in range(1,self.cem_num_iters):
-                # TODO(student): implement the CEM algorithm
-                # HINT: you need a special case for i == 0 to initialize
-                # the elite mean and std
-                act_sequences = np.random.normal(
-                    elite_mean,
-                    elite_std,
-                    size=(self.mpc_num_action_sequences, self.mpc_horizon, self.ac_dim)
+            # CEM keeps a factorized Gaussian over the full action sequence.
+            # That means the mean/std must preserve `(horizon, ac_dim)` shape;
+            # collapsing them to scalars destroys the per-step plan structure.
+            elite_mean = None
+            elite_std = None
+
+            for i in range(self.cem_num_iters):
+                if i == 0:
+                    candidate_action_sequences = action_sequences
+                else:
+                    candidate_action_sequences = np.random.normal(
+                        loc=elite_mean,
+                        scale=elite_std,
+                        size=(
+                            self.mpc_num_action_sequences,
+                            self.mpc_horizon,
+                            self.ac_dim,
+                        ),
+                    )
+                    candidate_action_sequences = np.clip(
+                        candidate_action_sequences,
+                        self.env.action_space.low,
+                        self.env.action_space.high,
+                    )
+
+                rewards = self.evaluate_action_sequences(
+                    obs, candidate_action_sequences
                 )
-                rewards =  self.evaluate_action_sequences(obs,act_sequences)
-                top_j_indices = np.argsort(rewards)[-self.cem_num_elites:]
-                top_j_seq = act_sequences[top_j_indices,:,:]
-                elite_mean, elite_std = np.mean(top_j_seq,dim=0),np.std(top_j_seq,dim=0)    
-            
-            fin_act_sequences = np.random.normal(
-                elite_mean,elite_std,size=(self.mpc_num_action_sequences,self.mpc_horizon,self.ac_dim)
-            )
-            rewards = self.evaluate_action_sequences(obs,fin_act_sequences)
-            best_index= np.argmax(rewards)
-            return fin_act_sequences[best_index][0]
+                elite_indices = np.argsort(rewards)[-self.cem_num_elites :]
+                elite_action_sequences = candidate_action_sequences[elite_indices]
+
+                new_elite_mean = np.mean(elite_action_sequences, axis=0)
+                new_elite_std = np.std(elite_action_sequences, axis=0)
+
+                if elite_mean is None:
+                    elite_mean = new_elite_mean
+                    elite_std = new_elite_std
+                else:
+                    # Alpha smooths the distribution update so one noisy CEM
+                    # iteration does not completely overwrite the previous plan.
+                    elite_mean = (
+                        self.cem_alpha * new_elite_mean
+                        + (1 - self.cem_alpha) * elite_mean
+                    )
+                    elite_std = (
+                        self.cem_alpha * new_elite_std
+                        + (1 - self.cem_alpha) * elite_std
+                    )
+
+                # Keep a small floor on std so the search does not collapse too
+                # early and get stuck re-sampling nearly identical sequences.
+                elite_std = np.maximum(elite_std, 1e-6)
+
+            return elite_mean[0]
 
 
         else:

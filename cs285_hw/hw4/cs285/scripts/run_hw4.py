@@ -159,8 +159,16 @@ def run_training_loop(
             # HINT: train each dynamics model in the ensemble with a *different* batch of transitions!
             # Use `replay_buffer.sample` with config["train_batch_size"].
             for i in range(config["agent_kwargs"]["ensemble_size"]):
-                batch = replay_buffer.sample(config["batch_size"])
-                ensemble_step_loss = actor_agent.update(i,batch["observations"],batch["actions"],batch["next_observations"])
+                # Each ensemble member should see its own randomly sampled
+                # training batch so the ensemble does not collapse to nearly
+                # identical models.
+                batch = replay_buffer.sample(config["train_batch_size"])
+                ensemble_step_loss = actor_agent.update(
+                    i,
+                    batch["observations"],
+                    batch["actions"],
+                    batch["next_observations"],
+                )
                 step_losses.append(ensemble_step_loss)
             all_losses.append(np.mean(step_losses))
 
@@ -211,7 +219,7 @@ def run_training_loop(
                     i,
                 )
 
-        # Run evaluation
+        # Run evaluation with trained model, with random shooting or cem based action selection
         if config["num_eval_trajectories"] == 0:
             continue
         print(f"Evaluating {config['num_eval_trajectories']} rollouts...")
@@ -237,6 +245,7 @@ def run_training_loop(
             logger.log_scalar(np.min(ep_lens), "eval/ep_len_min", itr)
 
             if args.num_render_trajectories > 0:
+                print("Logging videos....")
                 video_trajectories = utils.sample_n_trajectories(
                     render_env,
                     actor_agent,

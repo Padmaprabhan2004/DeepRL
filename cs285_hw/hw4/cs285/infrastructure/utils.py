@@ -19,19 +19,46 @@ class RandomPolicy:
         return self.env.action_space.sample()
 
 
+def _reset_env(env: gym.Env):
+    """Handle both Gym and Gymnasium reset signatures."""
+    reset_result = env.reset()
+    if isinstance(reset_result, tuple):
+        return reset_result[0]
+    return reset_result
+
+
+def _step_env(env: gym.Env, action):
+    """Handle both Gym and Gymnasium step signatures."""
+    step_result = env.step(action)
+    if len(step_result) == 5:
+        next_ob, rew, terminated, truncated, info = step_result
+        return next_ob, rew, terminated or truncated, info, truncated
+    next_ob, rew, done, info = step_result
+    truncated = info.get("TimeLimit.truncated", False)
+    return next_ob, rew, done, info, truncated
+
+
+def _render_frame(env: gym.Env):
+    """Render one RGB frame across legacy and modern Gym APIs."""
+    if hasattr(env, "sim"):
+        return env.sim.render(camera_name="track", height=500, width=500)[::-1]
+
+    try:
+        return env.render()
+    except TypeError:
+        return env.render(mode="rgb_array")
+
+
 def sample_trajectory(env: gym.Env, policy: MLPPolicy, max_length: int, render: bool = False) -> Dict[str, np.ndarray]:
     """Sample a rollout in the environment from a policy."""
-    ob = env.reset()
+    ob = _reset_env(env)
     obs, acs, rewards, next_obs, dones, image_obs = [], [], [], [], [], []
     steps = 0
 
     while True:
         # render an image
         if render:
-            if hasattr(env, "sim"):
-                img = env.sim.render(camera_name="track", height=500, width=500)[::-1]
-            else:
-                img = env.render(mode="rgb_array")
+            img = _render_frame(env)
 
             if isinstance(img, list):
                 img = img[0]
@@ -42,12 +69,12 @@ def sample_trajectory(env: gym.Env, policy: MLPPolicy, max_length: int, render: 
 
         ac = policy.get_action(ob)
 
-        next_ob, rew, done, info = env.step(ac)
+        next_ob, rew, done, info, truncated = _step_env(env, ac)
 
         steps += 1
         # only record a "done" into the replay buffer if not truncated
         done_not_truncated = (
-            done and steps <= max_length and not info.get("TimeLimit.truncated", False)
+            done and steps <= max_length and not truncated
         )
 
         # record result of taking that action
