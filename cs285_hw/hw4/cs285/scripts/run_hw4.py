@@ -38,14 +38,20 @@ def collect_mbpo_rollout(env: gym.Env,mb_agent: ModelBasedAgent,sac_agent: SoftA
         # HINT: get actions from `sac_agent` and `next_ob` predictions from `mb_agent`.
         # Average the ensemble predictions directly to get the next observation.
         # Get the reward using `env.get_reward`.
-        pass
-        #obs.append(ob)
-        #acs.append(ac)
-        #rewards.append(rew)
-        #next_obs.append(next_ob)
-        #dones.append(False)
 
-        #ob = next_ob
+        ac = sac_agent.get_action(ob)
+        next_ob=[]
+        for i in range(mb_agent.ensemble_size):
+            next_ob.append(mb_agent.get_dynamics_predictions(ob,ac))
+        next_ob = np.mean(np.array(next_ob),axis=0)
+        rew = env.get_reward(obs,ac)
+        obs.append(ob)
+        acs.append(ac)
+        rewards.append(rew)
+        next_obs.append(next_ob)
+        dones.append(False)
+
+        ob = next_ob
 
     return {
         "observation": np.array(obs),
