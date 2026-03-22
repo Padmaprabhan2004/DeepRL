@@ -9,7 +9,7 @@ from cs285.agents.model_based_agent import ModelBasedAgent
 from cs285.agents.soft_actor_critic import SoftActorCritic
 from cs285.infrastructure.replay_buffer import ReplayBuffer
 import cs285.env_configs
-
+from cs285.infrastructure import pytorch_util
 import os
 import time
 
@@ -102,6 +102,7 @@ def run_training_loop(
 
     # if doing MBPO, initialize SAC and make that our main agent that we use to
     # collect data and evaluate
+    #print(sac_config==None)
     if sac_config is not None:
         sac_agent = SoftActorCritic(
             env.observation_space.shape,
@@ -124,10 +125,11 @@ def run_training_loop(
         else:
             # since first collection has crossed and policy is somewhat trained, collect at least config["batch_size"] transitions with our `actor_agent`
             trajs, envsteps_this_batch = utils.sample_trajectories(env=env,policy=actor_agent,min_timesteps_per_batch=config["batch_size"],max_length=config["ep_len"])
-
+            #for mbpo this is the data collected with interaction with real env, D_env, so we sample s_i's from here to start out k-step rollouts using dynamics model NN.
         total_envsteps += envsteps_this_batch
         logger.log_scalar(total_envsteps, "total_envsteps", itr)
 
+        
         # insert newly collected data into replay buffer
         for traj in trajs:
             replay_buffer.batched_insert(
@@ -148,49 +150,52 @@ def run_training_loop(
                     next_observations=traj["next_observation"],
                     dones=traj["done"],
                 )
-
-        # update agent's statistics with the entire replay buffer
-        mb_agent.update_statistics(
-            obs=replay_buffer.observations[: len(replay_buffer)],
-            acs=replay_buffer.actions[: len(replay_buffer)],
-            next_obs=replay_buffer.next_observations[: len(replay_buffer)],
-        )
-
         # train agent
         print("Training agent...")
-        all_losses = []
-        for _ in tqdm.trange(config["num_agent_train_steps_per_iter"], dynamic_ncols=True):
-            step_losses = []
-            # train the dynamics models
-            # HINT: train each dynamics model in the ensemble with a *different* batch of transitions!
-            # Use `replay_buffer.sample` with config["train_batch_size"].
-            for i in range(config["agent_kwargs"]["ensemble_size"]):
-                # Each ensemble member should see its own randomly sampled
-                # training batch so the ensemble does not collapse to nearly
-                # identical models.
-                batch = replay_buffer.sample(config["train_batch_size"])
-                ensemble_step_loss = actor_agent.update(
-                    i,
-                    batch["observations"],
-                    batch["actions"],
-                    batch["next_observations"],
-                )
-                step_losses.append(ensemble_step_loss)
-            all_losses.append(np.mean(step_losses))
 
-        # on iteration 0, plot the full learning curve
-        if itr == 0:
-            plt.plot(all_losses)
-            plt.title("Iteration 0: Dynamics Model Training Loss")
-            plt.ylabel("Loss")
-            plt.xlabel("Step")
-            plt.savefig(os.path.join(logger._log_dir, "itr_0_loss_curve.png"))
+        if sac_agent is None:
+            # update agent's statistics with the entire replay buffer
+            mb_agent.update_statistics(
+                obs=replay_buffer.observations[: len(replay_buffer)],
+                acs=replay_buffer.actions[: len(replay_buffer)],
+                next_obs=replay_buffer.next_observations[: len(replay_buffer)],
+            )
 
-        # log the average loss
-        loss = np.mean(all_losses)
-        logger.log_scalar(loss, "dynamics_loss", itr)
 
-        # for MBPO: now we need to train the SAC agent
+
+            all_losses = []
+            for _ in tqdm.trange(config["num_agent_train_steps_per_iter"], dynamic_ncols=True):
+                step_losses = []
+                # train the dynamics models
+                # HINT: train each dynamics model in the ensemble with a *different* batch of transitions!
+                # Use `replay_buffer.sample` with config["train_batch_size"].
+                for i in range(config["agent_kwargs"]["ensemble_size"]):
+                    # Each ensemble member should see its own randomly sampled
+                    # training batch so the ensemble does not collapse to nearly
+                    # identical models.
+                    batch = replay_buffer.sample(config["train_batch_size"])
+                    ensemble_step_loss = actor_agent.update(
+                        i,
+                        batch["observations"],
+                        batch["actions"],
+                        batch["next_observations"],
+                    )
+                    step_losses.append(ensemble_step_loss)
+                all_losses.append(np.mean(step_losses))
+
+            # on iteration 0, plot the full learning curve
+            if itr == 0:
+                plt.plot(all_losses)
+                plt.title("Iteration 0: Dynamics Model Training Loss")
+                plt.ylabel("Loss")
+                plt.xlabel("Step")
+                plt.savefig(os.path.join(logger._log_dir, "itr_0_loss_curve.png"))
+
+            # log the average loss
+            loss = np.mean(all_losses)
+            logger.log_scalar(loss, "dynamics_loss", itr)
+
+            # for MBPO: now we need to train the SAC agent
         if sac_config is not None:
             print("Training SAC agent...")
             for i in tqdm.trange(
@@ -216,6 +221,7 @@ def run_training_loop(
                     )
                 # train SAC
                 batch = sac_replay_buffer.sample(sac_config["batch_size"])
+                batch = pytorch_util.from_numpy(batch)
                 sac_agent.update(
                     batch["observations"],
                     batch["actions"],
