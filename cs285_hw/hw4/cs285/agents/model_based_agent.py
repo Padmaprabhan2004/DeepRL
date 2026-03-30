@@ -140,18 +140,27 @@ class ModelBasedAgent(nn.Module):
             acs: (batch_size, ac_dim)
         Returns: (batch_size, ob_dim)
         """
+        # Preserve single-state calls as 1D outputs so downstream rollout code
+        # does not accidentally accumulate an extra batch dimension.
+        single_input = obs.ndim == 1
         obs = ptu.from_numpy(obs)
         acs = ptu.from_numpy(acs)
+        if single_input:
+            obs = obs[None]
+            acs = acs[None]
         # TODO(student): get the model's predicted `next_obs`
         # HINT: make sure to *unnormalize* the NN outputs (observation deltas)
         # Same hints as `update` above, avoid nasty divide-by-zero errors when
         # normalizing inputs!
-        input_states = torch.concat((obs,acs),dim=1) #(obs+acs,1)
-        input_states = (input_states-self.obs_acs_mean)/(self.obs_acs_std)
+        input_states = torch.concat((obs, acs), dim=1)
+        input_states = (input_states - self.obs_acs_mean) / (self.obs_acs_std)
         delta_pred = self.dynamics_models[i](input_states)
-        pred_next_obs = obs+ delta_pred*self.obs_delta_std+self.obs_delta_mean #unnormalize the nn outputs and add
+        pred_next_obs = obs + delta_pred * self.obs_delta_std + self.obs_delta_mean
 
-        return ptu.to_numpy(pred_next_obs)
+        pred_next_obs = ptu.to_numpy(pred_next_obs)
+        if single_input:
+            pred_next_obs = pred_next_obs[0]
+        return pred_next_obs
 
     def evaluate_action_sequences(self, obs: np.ndarray, action_sequences: np.ndarray):
         """

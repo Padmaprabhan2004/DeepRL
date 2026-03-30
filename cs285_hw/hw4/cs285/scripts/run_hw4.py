@@ -23,15 +23,14 @@ from cs285.infrastructure import utils
 from cs285.infrastructure.logger import Logger
 
 from scripting_utils import make_logger, make_config
-
 import argparse
-
 from cs285.envs import register_envs
 
 register_envs()
 
 #for sac rollouts
 def collect_mbpo_rollout(env: gym.Env,mb_agent: ModelBasedAgent,sac_agent: SoftActorCritic,ob: np.ndarray,rollout_len: int = 1,):
+    
     obs, acs, rewards, next_obs, dones = [], [], [], [], []
     for _ in range(rollout_len):
         # TODO(student): collect a rollout using the learned dynamics models
@@ -40,25 +39,28 @@ def collect_mbpo_rollout(env: gym.Env,mb_agent: ModelBasedAgent,sac_agent: SoftA
         # Get the reward using `env.get_reward`.
 
         ac = sac_agent.get_action(ob)
-        next_ob=[]
+        next_ob = []
         for i in range(mb_agent.ensemble_size):
-            next_ob.append(mb_agent.get_dynamics_predictions(ob,ac))
-        next_ob = np.mean(np.array(next_ob),axis=0)
-        rew = env.get_reward(obs,ac)
+            next_ob.append(mb_agent.get_dynamics_predictions(i, ob, ac))
+        next_ob = np.mean(np.array(next_ob), axis=0)
+        # Keep reward/done aligned with the imagined next state and store them
+        # separately so rollout["reward"] remains shape (T,) instead of (T, 2).
+        rew, done = env.get_reward(next_ob, ac)
+
         obs.append(ob)
         acs.append(ac)
         rewards.append(rew)
         next_obs.append(next_ob)
-        dones.append(False)
+        dones.append(done)
 
         ob = next_ob
 
     return {
-        "observation": np.array(obs),
-        "action": np.array(acs),
-        "reward": np.array(rewards),
-        "next_observation": np.array(next_obs),
-        "done": np.array(dones),
+        "observation": np.array(obs, dtype=np.float32),
+        "action": np.array(acs, dtype=np.float32),
+        "reward": np.array(rewards, dtype=np.float32),
+        "next_observation": np.array(next_obs, dtype=np.float32),
+        "done": np.array(dones, dtype=np.float32),
     }
 
 
@@ -140,7 +142,9 @@ def run_training_loop(
                 dones=traj["done"],
             )
 
-        # if doing MBPO, add the collected data to the SAC replay buffer as well->problem 3/4
+        # if doing MBPO, add the collected data to the SAC replay buffer as well, 
+        # NOTE THAT THE POLICY WILL BE TRAINED ON BOTH DATA ROLLOUTS GENERATED FROM
+        # real world rollouts as well as branched rollouts from model.
         if sac_config is not None:
             for traj in trajs:
                 sac_replay_buffer.batched_insert(
@@ -153,49 +157,47 @@ def run_training_loop(
         # train agent
         print("Training agent...")
 
-        if sac_agent is None:
-            # update agent's statistics with the entire replay buffer
-            mb_agent.update_statistics(
-                obs=replay_buffer.observations[: len(replay_buffer)],
-                acs=replay_buffer.actions[: len(replay_buffer)],
-                next_obs=replay_buffer.next_observations[: len(replay_buffer)],
-            )
+        # MBPO still requires a trained dynamics model; imagined rollouts are
+        # only useful if we update the ensemble every iteration on real data.
+        mb_agent.update_statistics(
+            obs=replay_buffer.observations[: len(replay_buffer)],
+            acs=replay_buffer.actions[: len(replay_buffer)],
+            next_obs=replay_buffer.next_observations[: len(replay_buffer)],
+        )
 
+        all_losses = []
+        for _ in tqdm.trange(config["num_agent_train_steps_per_iter"], dynamic_ncols=True):
+            step_losses = []
+            # train the dynamics models
+            # HINT: train each dynamics model in the ensemble with a *different* batch of transitions!
+            # Use `replay_buffer.sample` with config["train_batch_size"].
+            for i in range(config["agent_kwargs"]["ensemble_size"]):
+                # Each ensemble member should see its own randomly sampled
+                # training batch so the ensemble does not collapse to nearly
+                # identical models.
+                batch = replay_buffer.sample(config["train_batch_size"])
+                ensemble_step_loss = mb_agent.update(
+                    i,
+                    batch["observations"],
+                    batch["actions"],
+                    batch["next_observations"],
+                )
+                step_losses.append(ensemble_step_loss)
+            all_losses.append(np.mean(step_losses))
 
+        # on iteration 0, plot the full learning curve
+        if itr == 0:
+            plt.plot(all_losses)
+            plt.title("Iteration 0: Dynamics Model Training Loss")
+            plt.ylabel("Loss")
+            plt.xlabel("Step")
+            plt.savefig(os.path.join(logger._log_dir, "itr_0_loss_curve.png"))
 
-            all_losses = []
-            for _ in tqdm.trange(config["num_agent_train_steps_per_iter"], dynamic_ncols=True):
-                step_losses = []
-                # train the dynamics models
-                # HINT: train each dynamics model in the ensemble with a *different* batch of transitions!
-                # Use `replay_buffer.sample` with config["train_batch_size"].
-                for i in range(config["agent_kwargs"]["ensemble_size"]):
-                    # Each ensemble member should see its own randomly sampled
-                    # training batch so the ensemble does not collapse to nearly
-                    # identical models.
-                    batch = replay_buffer.sample(config["train_batch_size"])
-                    ensemble_step_loss = actor_agent.update(
-                        i,
-                        batch["observations"],
-                        batch["actions"],
-                        batch["next_observations"],
-                    )
-                    step_losses.append(ensemble_step_loss)
-                all_losses.append(np.mean(step_losses))
+        # log the average loss
+        loss = np.mean(all_losses)
+        logger.log_scalar(loss, "dynamics_loss", itr)
 
-            # on iteration 0, plot the full learning curve
-            if itr == 0:
-                plt.plot(all_losses)
-                plt.title("Iteration 0: Dynamics Model Training Loss")
-                plt.ylabel("Loss")
-                plt.xlabel("Step")
-                plt.savefig(os.path.join(logger._log_dir, "itr_0_loss_curve.png"))
-
-            # log the average loss
-            loss = np.mean(all_losses)
-            logger.log_scalar(loss, "dynamics_loss", itr)
-
-            # for MBPO: now we need to train the SAC agent
+        # for MBPO: now we need to train the SAC agent
         if sac_config is not None:
             print("Training SAC agent...")
             for i in tqdm.trange(

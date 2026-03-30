@@ -89,6 +89,15 @@ class ReplayBuffer:
         """
         Insert a batch of transitions into the replay buffer.
         """
+        rewards = np.asarray(rewards)
+        dones = np.asarray(dones)
+        # Real env data stores scalar rewards/dones as (N,), but some rollout
+        # paths may hand over (N, 1); normalize them to one shared layout.
+        if rewards.ndim == 2 and rewards.shape[1] == 1:
+            rewards = rewards[:, 0]
+        if dones.ndim == 2 and dones.shape[1] == 1:
+            dones = dones[:, 0]
+
         if self.observations is None:
             self.observations = np.empty(
                 (self.max_size, *observations.shape[1:]), dtype=observations.dtype

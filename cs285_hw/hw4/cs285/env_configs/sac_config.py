@@ -88,10 +88,12 @@ def sac_config(
     return {
         "agent_kwargs": {
             "make_critic": make_critic,
-            "make_critic_optimizer": make_actor_optimizer,
+            # Keep actor/critic optimizer factories matched to the correct
+            # network; swapping them silently changes the intended LR setup.
+            "make_critic_optimizer": make_critic_optimizer,
             "make_critic_schedule": make_lr_schedule,
             "make_actor": make_actor,
-            "make_actor_optimizer": make_critic_optimizer,
+            "make_actor_optimizer": make_actor_optimizer,
             "make_actor_schedule": make_lr_schedule,
             "num_critic_updates": num_critic_updates,
             "discount": discount,
