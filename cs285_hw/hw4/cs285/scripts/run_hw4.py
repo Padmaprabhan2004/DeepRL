@@ -166,10 +166,12 @@ def run_training_loop(
         )
 
         all_losses = []
+        #--------------MODEL TRAINING------------
+        #use ensemble of models to reduce model uncertainty
         for _ in tqdm.trange(config["num_agent_train_steps_per_iter"], dynamic_ncols=True):
             step_losses = []
             # train the dynamics models
-            # HINT: train each dynamics model in the ensemble with a *different* batch of transitions!
+            # train each dynamics model in the ensemble with a *different* batch of transitions!
             # Use `replay_buffer.sample` with config["train_batch_size"].
             for i in range(config["agent_kwargs"]["ensemble_size"]):
                 # Each ensemble member should see its own randomly sampled
@@ -184,8 +186,6 @@ def run_training_loop(
                 )
                 step_losses.append(ensemble_step_loss)
             all_losses.append(np.mean(step_losses))
-
-        # on iteration 0, plot the full learning curve
         if itr == 0:
             plt.plot(all_losses)
             plt.title("Iteration 0: Dynamics Model Training Loss")
@@ -196,15 +196,17 @@ def run_training_loop(
         # log the average loss
         loss = np.mean(all_losses)
         logger.log_scalar(loss, "dynamics_loss", itr)
-
-        # for MBPO: now we need to train the SAC agent
+        
+        #---SAC AGENT TRAINING------------------
         if sac_config is not None:
             print("Training SAC agent...")
             for i in tqdm.trange(
                 sac_config["num_agent_train_steps_per_iter"], dynamic_ncols=True
             ):
+                
                 if sac_config["mbpo_rollout_length"] > 0:
-                    # collect a rollout using the dynamics model
+                    # collect a rollout using the dynamics model 
+                    #WITH STARTING STATES SAMPLED FROM THE REAL WORLD REPLAY BUFFER.
                     rollout = collect_mbpo_rollout(
                         env,
                         mb_agent,
@@ -213,7 +215,8 @@ def run_training_loop(
                         replay_buffer.sample(1)["observations"][0],
                         sac_config["mbpo_rollout_length"],
                     )
-                    # insert it into the SAC replay buffer only
+                    # insert it into the SAC replay buffer, which will also have real world rollouts
+                    #so this acts as a data acceleration mechanism. 
                     sac_replay_buffer.batched_insert(
                         observations=rollout["observation"],
                         actions=rollout["action"],
