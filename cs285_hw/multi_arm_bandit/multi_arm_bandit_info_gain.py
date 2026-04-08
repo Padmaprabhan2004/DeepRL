@@ -78,6 +78,7 @@ class MultiArmedBandit:
         return np.array(actions),np.array(rewards)
     
     def multi_step(self,N_steps,N_experiments):
+        print("Running {} experiments with {} steps each...".format(N_experiments, N_steps))
         # 10000 EXPERIMENTS, WITH 500 STEPS EACH
         R = np.zeros((N_steps,))  
         A = np.zeros((N_steps, len(self.probs)))  
